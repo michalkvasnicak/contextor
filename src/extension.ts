@@ -33,10 +33,13 @@ export default function (pi: ExtensionAPI) {
     }
 
     try {
-      const settings = await loadLookupSettings();
+      const settings = await loadLookupSettings(ctx);
       if (!direct && (settings.recordOnly || !settings.model)) return miss;
-      if (!settings.model)
-        throw new Error('Set model in agent-memory/readcode.json under your Pi agent directory.');
+      if (!settings.model) {
+        throw new Error(
+          'Set model in .pi/pi-memory.json or agent-memory/config.json under your Pi agent directory.',
+        );
+      }
       return await lookupCodebase(
         ctx.cwd,
         question,

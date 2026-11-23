@@ -24,11 +24,11 @@ Ask Pi to call `codebase_lookup` with “Where is request routing implemented, a
 
 ## Configure live lookup
 
-Install `fff-mcp` and make sure it is on Pi's `PATH`. Configure the answerer model in Pi's user model catalog (for example, a local OpenAI-compatible MLX endpoint in `models.json`), then create `$PI_CODING_AGENT_DIR/agent-memory/readcode.json` (default: `~/.pi/agent/agent-memory/readcode.json`):
+Install `fff-mcp` and make sure it is on Pi's `PATH`. Configure the answerer model in Pi's user model catalog (for example, a local OpenAI-compatible MLX endpoint in `models.json`), then create `agent-memory/config.json` under your Pi agent directory (default: `~/.pi/agent/agent-memory/config.json`):
 
 ```json
 {
-  "model": "local-mlx/qwen3.6-35b-a3b",
+  "model": "omlx/Qwen3.6-35B-A3B-4bit",
   "thinkingLevel": "off",
   "timeoutMs": 20000,
   "recordOnly": true
@@ -36,6 +36,8 @@ Install `fff-mcp` and make sure it is on Pi's `PATH`. Configure the answerer mod
 ```
 
 Replace `model` with your configured `provider/modelId`. The model must support tool calls; it receives the question and relevant repository excerpts. Use a local endpoint if source must stay on your machine. Settings are read at each lookup. The defaults are thinking off, a 20-second timeout, and `recordOnly: false`.
+
+In a trusted project, put overrides in `.pi/pi-memory.json` relative to the directory where Pi is running. Omitted fields inherit the global settings or defaults.
 
 In `recordOnly` mode, the main agent's `codebase_lookup` tool logs the question and returns a miss without contacting the answerer. Type `/codebase_lookup Where is request routing implemented?` to run the live lookup anyway. Both entry points record questions; the extension does not save answers to its database. Tool results may still appear in the normal Pi transcript.
 

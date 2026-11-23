@@ -1,6 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { getAgentDir } from '@earendil-works/pi-coding-agent';
+import {
+  CONFIG_DIR_NAME,
+  getAgentDir,
+  type ExtensionContext,
+} from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 
@@ -23,16 +27,13 @@ const schema = Type.Object(
   { additionalProperties: false },
 );
 
-export async function loadLookupSettings() {
-  const path = join(getAgentDir(), 'agent-memory', 'readcode.json');
+async function readLookupSettings(path: string) {
   let input: unknown;
   try {
     input = JSON.parse(await readFile(path, 'utf8'));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      throw new Error(`Could not read valid JSON from ${path}.`, { cause: error });
-    }
-    input = {};
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw new Error(`Could not read valid JSON from ${path}.`, { cause: error });
   }
   if (!Value.Check(schema, input)) {
     const [issue] = Value.Errors(schema, input);
@@ -40,7 +41,24 @@ export async function loadLookupSettings() {
       `Invalid lookup settings in ${path}: ${issue?.path || '/'} ${issue?.message || ''}`,
     );
   }
-  return { recordOnly: false, thinkingLevel: 'off' as const, timeoutMs: 20_000, ...input };
+  return input;
+}
+
+export async function loadLookupSettings(ctx: Pick<ExtensionContext, 'cwd' | 'isProjectTrusted'>) {
+  const globalSettings = await readLookupSettings(
+    join(getAgentDir(), 'agent-memory', 'config.json'),
+  );
+  const projectSettings = ctx.isProjectTrusted()
+    ? await readLookupSettings(join(ctx.cwd, CONFIG_DIR_NAME, 'pi-memory.json'))
+    : undefined;
+
+  return {
+    recordOnly: false,
+    thinkingLevel: 'off' as const,
+    timeoutMs: 20_000,
+    ...globalSettings,
+    ...projectSettings,
+  };
 }
 
 export type LookupSettings = Awaited<ReturnType<typeof loadLookupSettings>>;
