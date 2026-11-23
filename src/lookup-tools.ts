@@ -20,7 +20,6 @@ async function resolveFile(root: string, path: string) {
 }
 
 export function createLookupTools(root: string, fff: McpClient) {
-  const reads = new Map<string, Set<number>>();
   const read = defineTool({
     name: 'read',
     label: 'Read source',
@@ -44,8 +43,6 @@ export function createLookupTools(root: string, fff: McpClient) {
         const bytes = buffer.subarray(0, bytesRead);
         if (bytes.includes(0)) throw new Error('Binary files are not supported.');
         const lines = bytes.toString('utf8').split(/\r?\n/);
-        const seen = reads.get(name) ?? new Set<number>();
-        reads.set(name, seen);
         const excerpt: string[] = [];
         let remaining = maxExcerptChars;
         for (let index = offset - 1; index < Math.min(lines.length, offset - 1 + limit); index++) {
@@ -53,7 +50,6 @@ export function createLookupTools(root: string, fff: McpClient) {
           const row = `${index + 1}: ${lines[index]}`;
           excerpt.push(row.length > remaining ? `${row.slice(0, remaining - 1)}…` : row);
           remaining -= excerpt.at(-1)!.length + 1;
-          seen.add(index + 1);
         }
         const next = offset + excerpt.length;
         const tail =
@@ -108,38 +104,35 @@ export function createLookupTools(root: string, fff: McpClient) {
     };
   }
 
-  return {
-    reads,
-    tools: [
-      read,
-      defineTool({
-        name: 'fff_find_files',
-        label: 'Find files with FFF',
-        description: 'Find repository files by fuzzy name or path. Keep the query short.',
-        parameters: Type.Object({ query: Type.String({ minLength: 1, maxLength: 300 }) }),
-        execute: (_id, args, signal) => search('find_files', args, signal),
-      }),
-      defineTool({
-        name: 'fff_grep',
-        label: 'Search with FFF',
-        description:
-          'Find source locations matching a symbol or text. Supports FFF path and glob constraints.',
-        parameters: Type.Object({ query: Type.String({ minLength: 1, maxLength: 300 }) }),
-        execute: (_id, args, signal) => search('grep', args, signal),
-      }),
-      defineTool({
-        name: 'fff_multi_grep',
-        label: 'Search multiple terms with FFF',
-        description: 'Find source locations matching any of several literal terms.',
-        parameters: Type.Object({
-          patterns: Type.Array(Type.String({ minLength: 1, maxLength: 120 }), {
-            minItems: 1,
-            maxItems: 8,
-          }),
-          constraints: Type.Optional(Type.String({ maxLength: 300 })),
+  return [
+    read,
+    defineTool({
+      name: 'fff_find_files',
+      label: 'Find files with FFF',
+      description: 'Find repository files by fuzzy name or path. Keep the query short.',
+      parameters: Type.Object({ query: Type.String({ minLength: 1, maxLength: 300 }) }),
+      execute: (_id, args, signal) => search('find_files', args, signal),
+    }),
+    defineTool({
+      name: 'fff_grep',
+      label: 'Search with FFF',
+      description:
+        'Find source locations matching a symbol or text. Supports FFF path and glob constraints.',
+      parameters: Type.Object({ query: Type.String({ minLength: 1, maxLength: 300 }) }),
+      execute: (_id, args, signal) => search('grep', args, signal),
+    }),
+    defineTool({
+      name: 'fff_multi_grep',
+      label: 'Search multiple terms with FFF',
+      description: 'Find source locations matching any of several literal terms.',
+      parameters: Type.Object({
+        patterns: Type.Array(Type.String({ minLength: 1, maxLength: 120 }), {
+          minItems: 1,
+          maxItems: 8,
         }),
-        execute: (_id, args, signal) => search('multi_grep', args, signal),
+        constraints: Type.Optional(Type.String({ maxLength: 300 })),
       }),
-    ],
-  };
+      execute: (_id, args, signal) => search('multi_grep', args, signal),
+    }),
+  ];
 }

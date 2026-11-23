@@ -41,6 +41,8 @@ In a trusted project, put overrides in `.pi/pi-memory.json` relative to the dire
 
 In `recordOnly` mode, the main agent's `codebase_lookup` tool logs the question and returns a miss without contacting the answerer. Type `/codebase_lookup Where is request routing implemented?` to run the live lookup anyway. Both entry points record questions; the extension does not save answers to its database. Tool results may still appear in the normal Pi transcript.
 
+To debug a live lookup, run `/codebase_lookup --transcript Where is request routing implemented?`. Pi prints the path to a separate JSONL session file after the lookup, even if the answerer fails after the session starts. Inspect the file directly or open it with `pi --session <path>`. This opt-in transcript is saved in a private temporary directory and can include source excerpts, tool calls, and model output. Delete it when you're done. Lookups do not save a separate transcript by default.
+
 ## Review recorded questions
 
 For persistent Pi sessions, the extension stores the exact `codebase_lookup` question and session metadata in a local SQLite database shared across projects: `~/.pi/agent/agent-memory/questions.sqlite` (under `PI_CODING_AGENT_DIR` if set). Each entry includes the time, working directory, session ID and transcript path, and selected model. The log does not copy the transcript or send anything over the network. Existing `questions.jsonl` logs are left untouched and are not imported.

@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { existsSync } from 'node:fs';
+import { mkdtemp, rmdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  SessionManager,
+} from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { loadLookupSettings } from './lookup-settings.ts';
 import { lookupCodebase } from './lookup.ts';
@@ -22,6 +30,7 @@ export default function (pi: ExtensionAPI) {
     ctx: ExtensionContext,
     direct: boolean,
     signal?: AbortSignal,
+    transcript?: SessionManager,
   ) {
     try {
       await recordQuestion(id, question, ctx);
@@ -45,6 +54,7 @@ export default function (pi: ExtensionAPI) {
         question,
         { ...settings, model: settings.model },
         signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal,
+        transcript,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown lookup failure.';
@@ -72,31 +82,61 @@ export default function (pi: ExtensionAPI) {
     async execute(toolCallId, { question }, signal, _onUpdate, ctx) {
       const result = await ask(toolCallId, question, ctx, false, signal);
       return {
-        content: [{ type: 'text', text: JSON.stringify(result) }],
+        content: [
+          {
+            type: 'text',
+            text: result.status === 'answered' ? result.answer : JSON.stringify(result),
+          },
+        ],
         details: {},
       };
     },
   });
 
   pi.registerCommand('codebase_lookup', {
-    description:
-      'Ask the read-only codebase guide (even when automatic lookups only record questions).',
+    description: 'Ask the read-only codebase guide. Add --transcript to save the lookup session.',
     async handler(args, ctx) {
-      const question = args.trim();
+      const input = args.trim();
+      const saveTranscript = /^--transcript(?:\s|$)/.test(input);
+      const question = saveTranscript ? input.slice('--transcript'.length).trim() : input;
       if (!question) {
-        ctx.ui.notify('Usage: /codebase_lookup <question>', 'warning');
+        ctx.ui.notify('Usage: /codebase_lookup [--transcript] <question>', 'warning');
         return;
       }
       ctx.ui.setStatus('codebase_lookup', 'Looking up code…');
       try {
-        const result = await ask(`command:${randomUUID()}`, question, ctx, true, ctx.signal);
-        if (lifetime.signal.aborted) return;
-        if (result.status === 'found') {
-          const citations = result.findings.map(({ path, line }) => `${path}:${line}`).join(', ');
-          ctx.ui.notify(`${result.answer}\n\nSources: ${citations}`, 'info');
-        } else {
-          ctx.ui.notify(result.message, result.status === 'error' ? 'error' : 'info');
+        let transcript: SessionManager | undefined;
+        let transcriptDir: string | undefined;
+        if (saveTranscript) {
+          try {
+            transcriptDir = await mkdtemp(join(tmpdir(), 'pi-memory-lookup-'));
+            transcript = SessionManager.create(ctx.cwd, transcriptDir);
+          } catch {
+            ctx.ui.notify('Could not create a codebase lookup transcript.', 'warning');
+          }
         }
+        const result = await ask(
+          `command:${randomUUID()}`,
+          question,
+          ctx,
+          true,
+          ctx.signal,
+          transcript,
+        );
+        const transcriptPath = transcript?.getSessionFile();
+        const saved = transcriptPath && existsSync(transcriptPath);
+        if (!saved && transcriptDir) await rmdir(transcriptDir).catch(() => {});
+        if (lifetime.signal.aborted) return;
+        if (result.status === 'answered') {
+          ctx.ui.notify(result.answer, 'info');
+        } else {
+          const hint =
+            result.status === 'error' && !saveTranscript
+              ? '\nRerun with /codebase_lookup --transcript <question> to debug.'
+              : '';
+          ctx.ui.notify(`${result.message}${hint}`, result.status === 'error' ? 'error' : 'info');
+        }
+        if (saved) ctx.ui.notify(`Lookup transcript: ${transcriptPath}`, 'info');
       } finally {
         if (!lifetime.signal.aborted) ctx.ui.setStatus('codebase_lookup', undefined);
       }
