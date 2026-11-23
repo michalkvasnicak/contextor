@@ -1,0 +1,22 @@
+{
+  "agent_before_settle": {
+    "failFast": true,
+    "checks": [
+      {
+        "name": "Format",
+        "type": "command",
+        "command": "pnpm format"
+      },
+      {
+        "name": "Lint",
+        "type": "command",
+        "command": "pnpm lint"
+      },
+      {
+        "name": "Test",
+        "type": "command",
+        "command": "pnpm test"
+      }
+    ]
+  }
+}
