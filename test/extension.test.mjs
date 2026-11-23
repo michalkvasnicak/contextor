@@ -12,8 +12,9 @@ test('registers codebase_lookup and returns a miss without echoing questions', a
   assert.deepEqual(tool.parameters.required, ['question']);
   assert.equal(tool.parameters.properties.question.type, 'string');
 
+  const context = { sessionManager: { getSessionFile: () => undefined } };
   for (const question of ['Where are requests routed?', 'How do writes reach storage?']) {
-    const response = await tool.execute('lookup-test', { question });
+    const response = await tool.execute('lookup-test', { question }, undefined, undefined, context);
     assert.deepEqual(JSON.parse(response.content[0].text), {
       status: 'miss',
       message: 'No codebase memory is available. Continue by inspecting the source.',

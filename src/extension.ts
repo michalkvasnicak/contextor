@@ -1,7 +1,10 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
+import { recordQuestion } from './question-log.ts';
 
 export default function (pi: ExtensionAPI) {
+  let warnedAboutQuestionLog = false;
+
   pi.registerTool({
     name: 'codebase_lookup',
     label: 'Codebase Lookup',
@@ -19,7 +22,16 @@ export default function (pi: ExtensionAPI) {
       { additionalProperties: false },
     ),
 
-    async execute() {
+    async execute(toolCallId, { question }, _signal, _onUpdate, ctx) {
+      try {
+        await recordQuestion(toolCallId, question, ctx);
+      } catch {
+        if (ctx.hasUI && !warnedAboutQuestionLog) {
+          warnedAboutQuestionLog = true;
+          ctx.ui.notify('Could not write the codebase lookup question log.', 'warning');
+        }
+      }
+
       const result = {
         status: 'miss',
         message: 'No codebase memory is available. Continue by inspecting the source.',
