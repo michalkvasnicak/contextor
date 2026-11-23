@@ -19,7 +19,7 @@ async function resolveFile(root: string, path: string) {
   return { file, name };
 }
 
-export function createLookupTools(root: string, fff: McpClient) {
+export function createLookupTools(root: string, fff: McpClient, filesRead: Set<string>) {
   const read = defineTool({
     name: 'read',
     label: 'Read source',
@@ -54,6 +54,7 @@ export function createLookupTools(root: string, fff: McpClient) {
         const next = offset + excerpt.length;
         const tail =
           excerpt.length && next <= lines.length ? `\nMore lines: use offset ${next}.` : '';
+        if (excerpt.length) filesRead.add(name);
         return {
           content: [
             {

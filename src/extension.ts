@@ -32,14 +32,14 @@ export default function (pi: ExtensionAPI) {
     signal?: AbortSignal,
     transcript?: SessionManager,
   ) {
-    try {
-      await recordQuestion(id, question, ctx);
-    } catch {
+    function warnAboutQuestionLog() {
       if (ctx.hasUI && !warnedAboutQuestionLog) {
         warnedAboutQuestionLog = true;
         ctx.ui.notify('Could not write the codebase lookup question log.', 'warning');
       }
     }
+
+    const saveAnswer = await recordQuestion(id, question, ctx).catch(warnAboutQuestionLog);
 
     try {
       const settings = await loadLookupSettings(ctx);
@@ -49,13 +49,15 @@ export default function (pi: ExtensionAPI) {
           'Set model in .pi/pi-memory.json or agent-memory/config.json under your Pi agent directory.',
         );
       }
-      return await lookupCodebase(
+      const result = await lookupCodebase(
         ctx.cwd,
         question,
         { ...settings, model: settings.model },
         signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal,
         transcript,
       );
+      if (saveAnswer) await saveAnswer(result.answer).catch(warnAboutQuestionLog);
+      return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown lookup failure.';
       return { status: 'error', message, findings: [] } as const;
@@ -85,7 +87,7 @@ export default function (pi: ExtensionAPI) {
         content: [
           {
             type: 'text',
-            text: result.status === 'answered' ? result.answer : JSON.stringify(result),
+            text: result.status === 'answered' ? result.answer.markdown : JSON.stringify(result),
           },
         ],
         details: {},
@@ -128,7 +130,7 @@ export default function (pi: ExtensionAPI) {
         if (!saved && transcriptDir) await rmdir(transcriptDir).catch(() => {});
         if (lifetime.signal.aborted) return;
         if (result.status === 'answered') {
-          ctx.ui.notify(result.answer, 'info');
+          ctx.ui.notify(result.answer.markdown, 'info');
         } else {
           const hint =
             result.status === 'error' && !saveTranscript

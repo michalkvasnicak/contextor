@@ -2,8 +2,9 @@ import { mkdir, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getAgentDir, type ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import type { LookupAnswer } from './lookup.ts';
 
 const questions = sqliteTable('questions', {
   id: integer('id').primaryKey(),
@@ -18,6 +19,8 @@ const questions = sqliteTable('questions', {
   provider: text('provider'),
   model: text('model'),
   thinkingLevel: text('thinking_level'),
+  answerMarkdown: text('answer_markdown'),
+  answerFilePaths: text('answer_file_paths', { mode: 'json' }).$type<string[]>(),
 });
 
 // Append migrations in order; each position defines a permanent schema version.
@@ -41,7 +44,16 @@ const migrations = [
       )
     `,
   ],
+  [
+    sql`ALTER TABLE questions ADD COLUMN answer_markdown TEXT`,
+    sql`ALTER TABLE questions ADD COLUMN answer_file_paths TEXT`,
+  ],
 ];
+
+async function openQuestionStore(path: string) {
+  const { drizzle } = await import('drizzle-orm/libsql/sqlite3');
+  return drizzle({ connection: { url: pathToFileURL(path).href, timeout: 1000 } });
+}
 
 export async function recordQuestion(toolCallId: string, question: string, ctx: ExtensionContext) {
   if (process.env.PI_MEMORY_LOG_QUESTIONS === '0') return;
@@ -68,12 +80,12 @@ export async function recordQuestion(toolCallId: string, question: string, ctx: 
   const file = await open(path, 'a', 0o600);
   await file.close();
 
-  const { drizzle } = await import('drizzle-orm/libsql/sqlite3');
-  const db = drizzle({ connection: { url: pathToFileURL(path).href, timeout: 1000 } });
+  const db = await openQuestionStore(path);
+  let id: number;
   try {
     // libSQL starts a write transaction before reading the version, so concurrent
     // Pi sessions cannot both apply the same migration.
-    await db.transaction(async (tx) => {
+    id = await db.transaction(async (tx) => {
       const state = await tx.get<{ user_version: number }>(sql`PRAGMA user_version`);
       const version = state?.user_version;
       if (version === undefined || version < 0 || version > migrations.length) {
@@ -87,9 +99,23 @@ export async function recordQuestion(toolCallId: string, question: string, ctx: 
         await tx.run(sql.raw(`PRAGMA user_version = ${migrations.length}`));
       }
 
-      await tx.insert(questions).values(entry).run();
+      const [row] = await tx.insert(questions).values(entry).returning({ id: questions.id });
+      return row.id;
     });
   } finally {
     db.$client.close();
   }
+
+  return async (answer: LookupAnswer) => {
+    const db = await openQuestionStore(path);
+    try {
+      await db
+        .update(questions)
+        .set({ answerMarkdown: answer.markdown, answerFilePaths: answer.filePaths })
+        .where(eq(questions.id, id))
+        .run();
+    } finally {
+      db.$client.close();
+    }
+  };
 }

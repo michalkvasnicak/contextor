@@ -39,7 +39,7 @@ Replace `model` with your configured `provider/modelId`. The model must support 
 
 In a trusted project, put overrides in `.pi/pi-memory.json` relative to the directory where Pi is running. Omitted fields inherit the global settings or defaults.
 
-In `recordOnly` mode, the main agent's `codebase_lookup` tool logs the question and returns a miss without contacting the answerer. Type `/codebase_lookup Where is request routing implemented?` to run the live lookup anyway. Both entry points record questions; the extension does not save answers to its database. Tool results may still appear in the normal Pi transcript.
+In `recordOnly` mode, the main agent's `codebase_lookup` tool logs the question and returns a miss without contacting the answerer. Type `/codebase_lookup Where is request routing implemented?` to run the live lookup anyway. With logging enabled, both entry points record questions and save successful answers with the repository-relative paths read during lookup. Tool results may still appear in the normal Pi transcript.
 
 To debug a live lookup, run `/codebase_lookup --transcript Where is request routing implemented?`. Pi prints the path to a separate JSONL session file after the lookup, even if the answerer fails after the session starts. Inspect the file directly or open it with `pi --session <path>`. This opt-in transcript is saved in a private temporary directory and can include source excerpts, tool calls, and model output. Delete it when you're done. Lookups do not save a separate transcript by default.
 
@@ -52,7 +52,7 @@ sqlite3 -readonly -header -column "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/agent
   'SELECT timestamp, cwd, question FROM questions ORDER BY id DESC LIMIT 20;'
 ```
 
-Questions can contain sensitive text. Use `PI_MEMORY_LOG_QUESTIONS=0 pi` to turn off this separate log, or `pi --no-session` to skip both the Pi transcript and this log. Turning logging off does not delete existing entries; close any running Pi sessions and delete `questions.sqlite` to clear the shared history. Deleting a Pi session does not clear its questions from this log.
+Questions and answers can contain sensitive text. Use `PI_MEMORY_LOG_QUESTIONS=0 pi` to turn off this separate log, or `pi --no-session` to skip both the Pi transcript and this log. Turning logging off does not delete existing entries; close any running Pi sessions and delete `questions.sqlite` to clear the shared history. Deleting a Pi session does not clear its questions from this log.
 
 ## Development
 
