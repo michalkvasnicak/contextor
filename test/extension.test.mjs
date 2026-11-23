@@ -4,7 +4,7 @@ import activate from '../src/extension.ts';
 
 test('registers codebase_lookup and returns a miss without echoing questions', async () => {
   const tools = [];
-  activate({ registerTool: (tool) => tools.push(tool) });
+  activate({ registerTool: (tool) => tools.push(tool), registerCommand() {}, on() {} });
 
   assert.equal(tools.length, 1);
   const [tool] = tools;

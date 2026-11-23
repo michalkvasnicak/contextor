@@ -1,9 +1,53 @@
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { randomUUID } from 'node:crypto';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
+import { loadLookupSettings } from './lookup-settings.ts';
+import { lookupCodebase } from './lookup.ts';
 import { recordQuestion } from './question-log.ts';
+
+const miss = {
+  status: 'miss',
+  message: 'No codebase memory is available. Continue by inspecting the source.',
+  findings: [],
+} as const;
 
 export default function (pi: ExtensionAPI) {
   let warnedAboutQuestionLog = false;
+  const lifetime = new AbortController();
+  pi.on('session_shutdown', () => lifetime.abort());
+
+  async function ask(
+    id: string,
+    question: string,
+    ctx: ExtensionContext,
+    direct: boolean,
+    signal?: AbortSignal,
+  ) {
+    try {
+      await recordQuestion(id, question, ctx);
+    } catch {
+      if (ctx.hasUI && !warnedAboutQuestionLog) {
+        warnedAboutQuestionLog = true;
+        ctx.ui.notify('Could not write the codebase lookup question log.', 'warning');
+      }
+    }
+
+    try {
+      const settings = await loadLookupSettings();
+      if (!direct && (settings.recordOnly || !settings.model)) return miss;
+      if (!settings.model)
+        throw new Error('Set model in agent-memory/readcode.json under your Pi agent directory.');
+      return await lookupCodebase(
+        ctx.cwd,
+        question,
+        { ...settings, model: settings.model },
+        signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown lookup failure.';
+      return { status: 'error', message, findings: [] } as const;
+    }
+  }
 
   pi.registerTool({
     name: 'codebase_lookup',
@@ -22,25 +66,37 @@ export default function (pi: ExtensionAPI) {
       { additionalProperties: false },
     ),
 
-    async execute(toolCallId, { question }, _signal, _onUpdate, ctx) {
-      try {
-        await recordQuestion(toolCallId, question, ctx);
-      } catch {
-        if (ctx.hasUI && !warnedAboutQuestionLog) {
-          warnedAboutQuestionLog = true;
-          ctx.ui.notify('Could not write the codebase lookup question log.', 'warning');
-        }
-      }
-
-      const result = {
-        status: 'miss',
-        message: 'No codebase memory is available. Continue by inspecting the source.',
-        findings: [],
-      };
+    async execute(toolCallId, { question }, signal, _onUpdate, ctx) {
+      const result = await ask(toolCallId, question, ctx, false, signal);
       return {
         content: [{ type: 'text', text: JSON.stringify(result) }],
         details: {},
       };
+    },
+  });
+
+  pi.registerCommand('codebase_lookup', {
+    description:
+      'Ask the read-only codebase guide (even when automatic lookups only record questions).',
+    async handler(args, ctx) {
+      const question = args.trim();
+      if (!question) {
+        ctx.ui.notify('Usage: /codebase_lookup <question>', 'warning');
+        return;
+      }
+      ctx.ui.setStatus('codebase_lookup', 'Looking up code…');
+      try {
+        const result = await ask(`command:${randomUUID()}`, question, ctx, true, ctx.signal);
+        if (lifetime.signal.aborted) return;
+        if (result.status === 'found') {
+          const citations = result.findings.map(({ path, line }) => `${path}:${line}`).join(', ');
+          ctx.ui.notify(`${result.answer}\n\nSources: ${citations}`, 'info');
+        } else {
+          ctx.ui.notify(result.message, result.status === 'error' ? 'error' : 'info');
+        }
+      } finally {
+        if (!lifetime.signal.aborted) ctx.ui.setStatus('codebase_lookup', undefined);
+      }
     },
   });
 }

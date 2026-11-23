@@ -2,7 +2,7 @@
 
 A Pi coding-agent extension that exposes `codebase_lookup` for questions about the current repository: where behavior is implemented, how components fit together, and where related tests live.
 
-The tool currently always returns a miss. It records questions for later review but does not inspect files, index code, or call another model.
+The extension records questions for later review. Without a configured lookup model, the tool returns a miss. With a model configured, it can search and read the current repository without editing files or running shell commands.
 
 ## Try it locally
 
@@ -21,6 +21,23 @@ pi install /absolute/path/to/agent-memory -l
 Omit `-l` to enable it across your projects.
 
 Ask Pi to call `codebase_lookup` with “Where is request routing implemented, and which tests cover it?” to check that it loads. To see whether Pi chooses the tool on its own, start a fresh session and give it a normal coding task without mentioning the tool. For a no-transcript run, start Pi with `--no-session`.
+
+## Configure live lookup
+
+Install `fff-mcp` and make sure it is on Pi's `PATH`. Configure the answerer model in Pi's user model catalog (for example, a local OpenAI-compatible MLX endpoint in `models.json`), then create `$PI_CODING_AGENT_DIR/agent-memory/readcode.json` (default: `~/.pi/agent/agent-memory/readcode.json`):
+
+```json
+{
+  "model": "local-mlx/qwen3.6-35b-a3b",
+  "thinkingLevel": "off",
+  "timeoutMs": 20000,
+  "recordOnly": true
+}
+```
+
+Replace `model` with your configured `provider/modelId`. The model must support tool calls; it receives the question and relevant repository excerpts. Use a local endpoint if source must stay on your machine. Settings are read at each lookup. The defaults are thinking off, a 20-second timeout, and `recordOnly: false`.
+
+In `recordOnly` mode, the main agent's `codebase_lookup` tool logs the question and returns a miss without contacting the answerer. Type `/codebase_lookup Where is request routing implemented?` to run the live lookup anyway. Both entry points record questions; the extension does not save answers to its database. Tool results may still appear in the normal Pi transcript.
 
 ## Review recorded questions
 
