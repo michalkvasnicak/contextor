@@ -15,8 +15,13 @@
     "prepare": "husky",
     "test": "node --test"
   },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "drizzle-orm": "^0.45.4"
+  },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "1.6.0",
+    "@types/node": "^24.19.2",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "oxfmt": "^0.72.0",

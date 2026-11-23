@@ -6,7 +6,7 @@ The tool currently always returns a miss. It records questions for later review 
 
 ## Try it locally
 
-From any project, load the TypeScript extension for one session (no build required):
+Run `pnpm install` in the extension checkout first. Then, from any project, load the TypeScript extension for one session (no build required):
 
 ```sh
 pi -e /absolute/path/to/agent-memory/src/extension.ts
@@ -24,17 +24,14 @@ Ask Pi to call `codebase_lookup` with “Where is request routing implemented, a
 
 ## Review recorded questions
 
-For persistent Pi sessions, the extension appends the exact `codebase_lookup` question and session metadata to a local log shared across projects: `~/.pi/agent/agent-memory/questions.jsonl` (under `PI_CODING_AGENT_DIR` if set). Each entry includes the time, working directory, session ID and transcript path, and selected model. The log does not copy the transcript or send anything over the network.
+For persistent Pi sessions, the extension stores the exact `codebase_lookup` question and session metadata in a local SQLite database shared across projects: `~/.pi/agent/agent-memory/questions.sqlite` (under `PI_CODING_AGENT_DIR` if set). Each entry includes the time, working directory, session ID and transcript path, and selected model. The log does not copy the transcript or send anything over the network. Existing `questions.jsonl` logs are left untouched and are not imported.
 
 ```sh
-# Questions across all projects
-jq -r '[.timestamp, .cwd, .question] | @tsv' "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/agent-memory/questions.jsonl"
-
-# Only questions asked from the current working directory
-jq --arg cwd "$PWD" 'select(.cwd == $cwd)' "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/agent-memory/questions.jsonl"
+sqlite3 -readonly -header -column "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/agent-memory/questions.sqlite" \
+  'SELECT timestamp, cwd, question FROM questions ORDER BY id DESC LIMIT 20;'
 ```
 
-Questions can contain sensitive text. Use `PI_MEMORY_LOG_QUESTIONS=0 pi` to turn off this separate log, or `pi --no-session` to skip both the Pi transcript and this log. Turning logging off does not delete existing entries; delete `questions.jsonl` to clear the shared history. Deleting a Pi session does not clear its questions from this log.
+Questions can contain sensitive text. Use `PI_MEMORY_LOG_QUESTIONS=0 pi` to turn off this separate log, or `pi --no-session` to skip both the Pi transcript and this log. Turning logging off does not delete existing entries; close any running Pi sessions and delete `questions.sqlite` to clear the shared history. Deleting a Pi session does not clear its questions from this log.
 
 ## Development
 
