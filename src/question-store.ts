@@ -20,22 +20,28 @@ const questions = sqliteTable('questions', {
   thinkingLevel: text('thinking_level'),
 });
 
-const createQuestionsTable = sql`
-  CREATE TABLE IF NOT EXISTS questions (
-    id INTEGER PRIMARY KEY,
-    timestamp TEXT NOT NULL,
-    tool_call_id TEXT NOT NULL,
-    question TEXT NOT NULL,
-    cwd TEXT NOT NULL,
-    session_id TEXT NOT NULL,
-    session_file TEXT NOT NULL,
-    session_name TEXT,
-    mode TEXT NOT NULL,
-    provider TEXT,
-    model TEXT,
-    thinking_level TEXT
-  )
-`;
+// Append migrations in order; each position defines a permanent schema version.
+const migrations = [
+  [
+    // Version 1 also adopts existing unversioned databases without changing their data.
+    sql`
+      CREATE TABLE IF NOT EXISTS questions (
+        id INTEGER PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        tool_call_id TEXT NOT NULL,
+        question TEXT NOT NULL,
+        cwd TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        session_file TEXT NOT NULL,
+        session_name TEXT,
+        mode TEXT NOT NULL,
+        provider TEXT,
+        model TEXT,
+        thinking_level TEXT
+      )
+    `,
+  ],
+];
 
 export async function recordQuestion(toolCallId: string, question: string, ctx: ExtensionContext) {
   if (process.env.PI_MEMORY_LOG_QUESTIONS === '0') return;
@@ -65,8 +71,24 @@ export async function recordQuestion(toolCallId: string, question: string, ctx: 
   const { drizzle } = await import('drizzle-orm/libsql/sqlite3');
   const db = drizzle({ connection: { url: pathToFileURL(path).href, timeout: 1000 } });
   try {
-    await db.run(createQuestionsTable);
-    await db.insert(questions).values(entry).run();
+    // libSQL starts a write transaction before reading the version, so concurrent
+    // Pi sessions cannot both apply the same migration.
+    await db.transaction(async (tx) => {
+      const state = await tx.get<{ user_version: number }>(sql`PRAGMA user_version`);
+      const version = state?.user_version;
+      if (version === undefined || version < 0 || version > migrations.length) {
+        throw new Error(`Unsupported question store schema version: ${version}`);
+      }
+
+      for (const statements of migrations.slice(version)) {
+        for (const statement of statements) await tx.run(statement);
+      }
+      if (version < migrations.length) {
+        await tx.run(sql.raw(`PRAGMA user_version = ${migrations.length}`));
+      }
+
+      await tx.insert(questions).values(entry).run();
+    });
   } finally {
     db.$client.close();
   }

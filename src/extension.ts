@@ -3,7 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import { Type } from 'typebox';
 import { loadLookupSettings } from './lookup-settings.ts';
 import { lookupCodebase } from './lookup.ts';
-import { recordQuestion } from './question-log.ts';
+import { recordQuestion } from './question-store.ts';
 
 const miss = {
   status: 'miss',
