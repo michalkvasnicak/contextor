@@ -30,6 +30,23 @@ src/refunds.ts:31-36
 
 JSON returns an array with `path` and, where applicable, `symbolName`, `startLine`, and `endLine`. Paths are relative to the queried directory; line ranges are one-based and inclusive.
 
+## Serve queries over HTTP
+
+Run `contextor index` in your project, then start `contextor serve` from the same directory:
+
+```sh
+contextor serve
+curl 'http://127.0.0.1:8080/v1/openapi'
+curl 'http://127.0.0.1:8080/v1/query?identifier=billing'
+curl 'http://127.0.0.1:8080/v1/query?identifier=billing&format=json&limit=10'
+```
+
+`GET /v1/query` requires `identifier` and defaults to `format=text` and `limit=30`. It reads the existing index without scanning files, and returns the same text or JSON as the CLI. You can re-run `contextor index` without restarting the server.
+
+`GET /v1/openapi` returns the OpenAPI 3.1 document as JSON.
+
+The server binds to `127.0.0.1:8080` by default; use `--listen 127.0.0.1:9000` to change the port. There is no authentication, so only bind to a trusted interface.
+
 ## Mark features
 
 In JavaScript, JSX, TypeScript, and TSX, a leading header comment can tag the whole file, and a doc comment can tag the next named declaration:

@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 anyhow = "1"
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
 blake3 = "1"
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
@@ -15,6 +16,9 @@ rusqlite = { version = "0.38", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde-saphyr = { version = "0.0.27", default-features = false, features = ["deserialize"] }
+tokio = { version = "1", features = ["net", "rt", "signal"] }
 tree-sitter = "0.26"
 tree-sitter-javascript = "0.25"
 tree-sitter-typescript = "0.23"
+utoipa = "6"
+utoipa-axum = "0.3"
