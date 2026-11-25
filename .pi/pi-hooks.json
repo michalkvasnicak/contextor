@@ -5,17 +5,35 @@
       {
         "name": "Format",
         "type": "command",
-        "command": "pnpm format"
+        "command": "pnpm -C pi-contextor format"
       },
       {
         "name": "Lint",
         "type": "command",
-        "command": "pnpm lint"
+        "command": "pnpm -C pi-contextor lint"
       },
       {
-        "name": "Test",
+        "name": "Type check",
         "type": "command",
-        "command": "pnpm test"
+        "command": "pnpm -C pi-contextor check"
+      },
+      {
+        "name": "Rust format",
+        "type": "command",
+        "inputs": ["contextor/**"],
+        "command": "cargo fmt --manifest-path contextor/Cargo.toml -- --check"
+      },
+      {
+        "name": "Rust lint",
+        "type": "command",
+        "inputs": ["contextor/**"],
+        "command": "cargo clippy --locked --manifest-path contextor/Cargo.toml --all-targets -- -D warnings"
+      },
+      {
+        "name": "Rust tests",
+        "type": "command",
+        "inputs": ["contextor/**"],
+        "command": "cargo test --locked --manifest-path contextor/Cargo.toml"
       }
     ]
   }

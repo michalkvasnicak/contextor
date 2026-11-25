@@ -1,1 +1,1 @@
-pnpm exec lint-staged
+pnpm -C pi-contextor exec lint-staged

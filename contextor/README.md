@@ -3,7 +3,7 @@
 Install the CLI from this checkout with a recent stable Rust toolchain and a C compiler:
 
 ```sh
-cargo install --locked --path indexer
+cargo install --locked --path contextor
 ```
 
 Run it from the directory you want to search:
