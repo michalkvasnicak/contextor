@@ -1,6 +1,7 @@
 mod extract;
 mod index;
 
+use std::fmt::{self, Display};
 use std::io::{self, BufWriter, Write};
 
 use anyhow::Result;
@@ -18,6 +19,11 @@ struct Cli {
 enum Command {
     /// Create or update the index for the current directory.
     Index,
+    /// List all distinct feature identifiers in the existing index.
+    Features {
+        #[arg(long, value_enum, default_value = "text")]
+        format: Format,
+    },
     /// Find targets with an exact feature identifier in the existing index.
     Query {
         identifier: String,
@@ -46,36 +52,43 @@ struct Match {
     end_line: Option<u32>,
 }
 
+impl Display for Match {
+    fn fmt(&self, output: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(output, "{}", self.path)?;
+        if let (Some(start), Some(end)) = (self.start_line, self.end_line) {
+            write!(output, ":{start}-{end}")?;
+        }
+        if let Some(symbol) = &self.symbol_name {
+            write!(output, " {symbol}")?;
+        }
+        Ok(())
+    }
+}
+
 fn run() -> Result<()> {
     let cli = Cli::parse();
     let root = std::env::current_dir()?.canonicalize()?;
     match cli.command {
         Command::Index => index::update(&root),
+        Command::Features { format } => print_results(&index::features(&root)?, format),
         Command::Query {
             identifier,
             limit,
             format,
-        } => print_matches(index::query(&root, &identifier, limit)?, format),
+        } => print_results(&index::query(&root, &identifier, limit)?, format),
     }
 }
 
-fn print_matches(matches: Vec<Match>, format: Format) -> Result<()> {
+fn print_results<T: Display + Serialize>(results: &[T], format: Format) -> Result<()> {
     let mut output = BufWriter::new(io::stdout().lock());
     match format {
         Format::Json => {
-            serde_json::to_writer(&mut output, &matches)?;
+            serde_json::to_writer(&mut output, results)?;
             writeln!(output)?;
         }
         Format::Text => {
-            for result in matches {
-                write!(output, "{}", result.path)?;
-                if let (Some(start), Some(end)) = (result.start_line, result.end_line) {
-                    write!(output, ":{start}-{end}")?;
-                }
-                if let Some(symbol) = result.symbol_name {
-                    write!(output, " {symbol}")?;
-                }
-                writeln!(output)?;
+            for result in results {
+                writeln!(output, "{result}")?;
             }
         }
     }

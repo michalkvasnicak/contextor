@@ -10,13 +10,17 @@ Run it from the directory you want to search:
 
 ```sh
 contextor index
+contextor features
+contextor features --format json
 contextor query billing
 contextor query billing --format json --limit 10
 ```
 
 `contextor index` creates or incrementally updates the current directory's index and exits. Queries are read-only and look up an exact, case-sensitive identifier in the last completed index. Run `contextor index` again after changing source files. Each project has a database at `~/.contextor/<slug>-<path-hash>/index.sqlite`. The slug and hash come from the absolute project path, so different directories with the same name get separate databases. The scan respects ignore rules and skips hidden paths and `node_modules`.
 
-Results are capped at 30 by default. Text uses one line per result:
+`contextor features` lists all distinct identifiers in sorted order from the existing index. It prints one identifier per line by default, or a JSON array of strings with `--format json`.
+
+Query results are capped at 30 by default. Text uses one line per result:
 
 ```text
 docs/billing.md

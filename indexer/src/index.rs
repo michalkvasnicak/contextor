@@ -29,6 +29,18 @@ pub fn update(root: &Path) -> Result<()> {
 }
 
 pub fn query(root: &Path, identifier: &str, limit: u32) -> Result<Vec<Match>> {
+    read_index(root, |db| lookup(db, identifier, limit))
+}
+
+pub fn features(root: &Path) -> Result<Vec<String>> {
+    read_index(root, |db| {
+        let mut statement = db.prepare("SELECT DISTINCT feature FROM annotations ORDER BY feature")?;
+        let rows = statement.query_map([], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    })
+}
+
+fn read_index<T>(root: &Path, read: impl FnOnce(&Transaction<'_>) -> Result<T>) -> Result<T> {
     let path = database_path(root)?;
     let mut connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .with_context(|| {
@@ -46,9 +58,9 @@ pub fn query(root: &Path, identifier: &str, limit: u32) -> Result<Vec<Match>> {
         "incompatible index at {}; run `contextor index` to rebuild it",
         path.display()
     );
-    let matches = lookup(&transaction, identifier, limit)?;
+    let result = read(&transaction)?;
     transaction.commit()?;
-    Ok(matches)
+    Ok(result)
 }
 
 fn database_path(root: &Path) -> Result<PathBuf> {
