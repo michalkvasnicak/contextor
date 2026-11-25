@@ -1,0 +1,10 @@
+/** @feature billing */
+export class Invoice {
+  /** @feature billing */
+  total = 0;
+
+  /** @feature refunds */
+  refund() {
+    return this.total;
+  }
+}

@@ -1,0 +1,4 @@
+[
+  { "feature": "billing", "symbol": "Invoice.refund", "lines": [6, 8] },
+  { "feature": "refunds", "symbol": "Invoice.refund", "lines": [6, 8] }
+]

@@ -1,0 +1,8 @@
+/** @feature billing */
+export interface PaymentGateway {
+  /** @feature billing */
+  provider: string;
+
+  /** @feature refunds */
+  refund(amount: number): void;
+}

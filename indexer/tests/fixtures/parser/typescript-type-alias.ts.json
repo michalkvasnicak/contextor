@@ -1,0 +1,5 @@
+[
+  { "feature": "billing", "symbol": "Payment", "lines": [2, 8] },
+  { "feature": "billing", "symbol": "Payment.metadata", "lines": [4, 7] },
+  { "feature": "refunds", "symbol": "Payment.metadata.reference", "lines": [6, 6] }
+]

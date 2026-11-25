@@ -1,0 +1,8 @@
+/** @feature billing */
+export type Payment = {
+  /** @feature billing */
+  metadata: {
+    /** @feature refunds */
+    reference: string;
+  };
+};

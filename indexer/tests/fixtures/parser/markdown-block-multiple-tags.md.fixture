@@ -1,0 +1,11 @@
+<!--
+@feature-start
+@feature billing
+@feature refunds
+-->
+
+A tagged paragraph.
+
+Another paragraph.
+
+<!-- @feature-end -->

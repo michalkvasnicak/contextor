@@ -1,0 +1,4 @@
+/** @feature {billing} */
+export function charge(): number {
+  return 1;
+}

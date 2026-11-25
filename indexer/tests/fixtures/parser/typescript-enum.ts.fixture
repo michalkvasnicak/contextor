@@ -1,0 +1,7 @@
+/** @feature billing */
+export enum PaymentState {
+  /** @feature billing */
+  Pending,
+  /** @feature refunds */
+  Refunded = 2,
+}

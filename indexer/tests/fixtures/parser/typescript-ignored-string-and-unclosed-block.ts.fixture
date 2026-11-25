@@ -1,0 +1,3 @@
+const example = '/** @feature example */';
+// @feature-start unfinished
+record();

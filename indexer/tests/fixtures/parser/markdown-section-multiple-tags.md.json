@@ -1,0 +1,5 @@
+[
+  { "feature": "billing", "symbol": "Refunds", "lines": [8, 10] },
+  { "feature": "guide" },
+  { "feature": "refunds", "symbol": "Refunds", "lines": [8, 10] }
+]

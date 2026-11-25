@@ -1,0 +1,6 @@
+function refund() {
+  // @feature-start billing
+  validate();
+  record();
+  // @feature-end billing
+}

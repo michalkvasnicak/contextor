@@ -1,0 +1,5 @@
+[
+  { "feature": "billing", "symbol": "PaymentState", "lines": [2, 7] },
+  { "feature": "billing", "symbol": "PaymentState.Pending", "lines": [4, 4] },
+  { "feature": "refunds", "symbol": "PaymentState.Refunded", "lines": [6, 6] }
+]

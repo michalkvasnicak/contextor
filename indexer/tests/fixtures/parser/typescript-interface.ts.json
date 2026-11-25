@@ -1,0 +1,5 @@
+[
+  { "feature": "billing", "symbol": "PaymentGateway", "lines": [2, 8] },
+  { "feature": "billing", "symbol": "PaymentGateway.provider", "lines": [4, 4] },
+  { "feature": "refunds", "symbol": "PaymentGateway.refund", "lines": [7, 7] }
+]
