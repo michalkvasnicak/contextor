@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1](https://github.com/michalkvasnicak/contextor/compare/v0.1.0...v0.1.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* **contextor:** treat a missing index as empty ([2057944](https://github.com/michalkvasnicak/contextor/commit/2057944bd13441864c5b7c1bca18949e5e7acaba))
+* **pi-contextor:** explain how to install the missing CLI ([cce08ee](https://github.com/michalkvasnicak/contextor/commit/cce08ee728705b59e16cc20644705c9ba2ee6863))
+
 ## 0.1.0 (2026-11-27)
 
 
