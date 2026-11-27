@@ -12,14 +12,15 @@ Alternatively, install the CLI from source by running this from the repository r
 make install
 ```
 
-From the project you want to work on:
+Install the Pi extension from npm:
 
 ```sh
-contextor index
-pi -e /absolute/path/to/agent-memory/pi-contextor/extension.ts
+pi install npm:@michalkvasnicak/pi-contextor
 ```
 
-To keep the extension enabled for that project, use `pi install /absolute/path/to/agent-memory/pi-contextor -l` instead. Omit `-l` to enable it globally. The package also loads the Contextor skill; use `/skill:contextor` for guidance on annotating code and documentation.
+Add `-l` to install only for the current project. To use a local checkout instead, pass its `pi-contextor` directory to `pi install`.
+
+Run `contextor index` from the project you want to work on. The Pi package also loads the Contextor skill; use `/skill:contextor` for guidance on annotating code and documentation.
 
 Type `#` in the Pi editor, then type part of a feature name and press Tab to select it. Pi inserts a compact reference such as `#{billing}`. Repeat to attach more features, or delete a reference before sending to leave it out. You can also type `#{billing}` directly if you know the exact identifier. The model gets matching paths, symbols, and line ranges, not full source files.
 

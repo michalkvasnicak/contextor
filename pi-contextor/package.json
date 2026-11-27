@@ -1,12 +1,24 @@
 {
-  "name": "pi-contextor",
+  "name": "@michalkvasnicak/pi-contextor",
   "version": "0.1.0",
-  "private": true,
   "description": "Attach indexed feature locations to Pi prompts.",
   "keywords": [
     "pi-package"
   ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/michalkvasnicak/contextor.git",
+    "directory": "pi-contextor"
+  },
+  "files": [
+    "extension.ts",
+    "skills/"
+  ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "check": "tsc --noEmit",
     "lint": "oxlint",
