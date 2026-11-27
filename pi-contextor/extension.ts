@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { fuzzyFilter, Text } from '@earendil-works/pi-tui';
+import { Container, fuzzyFilter, MouseRegion, Text } from '@earendil-works/pi-tui';
 
 const MESSAGE_TYPE = 'contextor-features';
 const QUERY_ENTRY_TYPE = 'contextor-query';
@@ -13,6 +13,7 @@ type QueryResult = { locations: string } | { error: string };
 
 export default function (pi: ExtensionAPI): void {
   const draftQueries = new Map<string, Promise<QueryResult>>();
+  const clickedExpansion = new WeakMap<object, { global: boolean; open: boolean }>();
   let featureListCache: { request: Promise<string[]>; expiresAt: number } | undefined;
 
   async function runContextor(cwd: string, args: string[], timeout = 5_000): Promise<string> {
@@ -197,11 +198,34 @@ export default function (pi: ExtensionAPI): void {
   pi.registerMessageRenderer(MESSAGE_TYPE, (message, { expanded, outputPad }, theme) => {
     const features = message.details as string[] | undefined;
     const summary = features?.map((feature) => `#{${feature}}`).join(', ');
-    const title = theme.fg(
-      'muted',
-      summary ? `Contextor: ${summary}` : 'Contextor feature locations',
+    const title = summary ? `Contextor: ${summary}` : 'Contextor feature locations';
+    if (typeof message.content !== 'string')
+      return new Text(theme.fg('muted', title), outputPad, 0);
+
+    // Keep clicks across renderer rebuilds, but let Ctrl+O reset the row to Pi's global state.
+    const clicked = clickedExpansion.get(message);
+    if (clicked && clicked.global !== expanded) clickedExpansion.delete(message);
+    let open = clicked?.global === expanded ? clicked.open : expanded;
+    const row = new Container();
+    const heading = new Text('', outputPad, 0);
+    const details = new Text(message.content, outputPad, 0);
+
+    function updateRow() {
+      heading.setText(theme.fg('muted', `${open ? '▾' : '▸'} ${title}`));
+      if (open) row.addChild(details);
+      else row.removeChild(details);
+    }
+
+    row.addChild(
+      new MouseRegion(heading, (event) => {
+        if (event.type !== 'click' || event.button !== 'left') return;
+        open = !open;
+        clickedExpansion.set(message, { global: expanded, open });
+        updateRow();
+        return { handled: true };
+      }),
     );
-    const content = expanded && typeof message.content === 'string' ? `\n${message.content}` : '';
-    return new Text(`${title}${content}`, outputPad, 0);
+    updateRow();
+    return row;
   });
 }
