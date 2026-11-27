@@ -1,6 +1,6 @@
 {
   "name": "@michalkvasnicak/pi-contextor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Attach indexed feature locations to Pi prompts.",
   "keywords": [
     "pi-package"
