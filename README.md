@@ -4,7 +4,9 @@ Contextor finds feature annotations in a codebase and lets you attach relevant l
 
 ## Use in Pi
 
-Install the CLI from the repository root and make sure `contextor` is on Pi's `PATH`:
+Download the CLI archive for your platform from [GitHub Releases](https://github.com/michalkvasnicak/contextor/releases), extract it, and put the `contextor` executable on Pi's `PATH`.
+
+Alternatively, install the CLI from source by running this from the repository root:
 
 ```sh
 make install
