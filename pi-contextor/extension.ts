@@ -9,7 +9,15 @@ const MAX_SUGGESTIONS = 20;
 const COMPLETION_PREFIX = /(?:^|\s)(#([^\s#{}]*))$/u;
 const FEATURE_REFERENCE = /#\{([^\s{}]+)\}/gu;
 
-type QueryResult = { locations: string } | { error: string };
+const CLI_INSTALL_HELP =
+  'The Contextor CLI (`contextor`) was not found on Pi’s PATH. ' +
+  'Download the archive for this OS and CPU from https://github.com/michalkvasnicak/contextor/releases/latest, ' +
+  'extract it, and put the `contextor` executable in a directory on Pi’s PATH. ' +
+  'Verify with `contextor --version`, then run `contextor index` in the project and retry.';
+
+class ContextorNotFoundError extends Error {}
+
+type QueryResult = { locations: string } | { error: unknown };
 
 export default function (pi: ExtensionAPI): void {
   const draftQueries = new Map<string, Promise<QueryResult>>();
@@ -19,7 +27,12 @@ export default function (pi: ExtensionAPI): void {
   async function runContextor(cwd: string, args: string[], timeout = 5_000): Promise<string> {
     const result = await pi.exec('contextor', args, { cwd, timeout });
     if (result.code !== 0) {
-      throw new Error(result.stderr.trim() || `contextor exited with code ${result.code}`);
+      const stderr = result.stderr.trim();
+      // Pi reports spawn failures through stderr rather than throwing them.
+      if (stderr === 'spawn contextor ENOENT') {
+        throw new ContextorNotFoundError(CLI_INSTALL_HELP);
+      }
+      throw new Error(stderr || `contextor exited with code ${result.code}`);
     }
     return result.stdout.trim();
   }
@@ -28,7 +41,7 @@ export default function (pi: ExtensionAPI): void {
     try {
       return { locations: await runContextor(cwd, ['query', '--', feature]) };
     } catch (error) {
-      return { error: String(error) };
+      return { error };
     }
   }
 
@@ -43,20 +56,29 @@ export default function (pi: ExtensionAPI): void {
     const results = await Promise.all(queries);
     const attached: string[] = [];
     const blocks: string[] = [];
+    let cliMissing = false;
     for (const [index, feature] of features.entries()) {
       const result = results[index];
       if ('error' in result) {
-        ctx.ui.notify(`Contextor could not query ${feature}: ${result.error}`, 'warning');
+        if (result.error instanceof ContextorNotFoundError) {
+          cliMissing = true;
+        } else {
+          ctx.ui.notify(`Contextor could not query ${feature}: ${String(result.error)}`, 'warning');
+        }
         continue;
       }
       attached.push(feature);
       blocks.push(`#{${feature}}\n${result.locations || '(no indexed matches)'}`);
     }
+    const sections: string[] = [];
     if (blocks.length > 0) {
-      return {
-        content: `Contextor feature locations (paths relative to the working directory):\n\n${blocks.join('\n\n')}`,
-        features: attached,
-      };
+      sections.push(
+        `Contextor feature locations (paths relative to the working directory):\n\n${blocks.join('\n\n')}`,
+      );
+    }
+    if (cliMissing) sections.push(CLI_INSTALL_HELP);
+    if (sections.length > 0) {
+      return { content: sections.join('\n\n'), features: attached };
     }
   }
 
@@ -80,7 +102,7 @@ export default function (pi: ExtensionAPI): void {
       }
       const result = await queryFeature(ctx.cwd, feature);
       if ('error' in result) {
-        ctx.ui.notify(`Contextor could not query ${feature}: ${result.error}`, 'error');
+        ctx.ui.notify(`Contextor could not query ${feature}: ${String(result.error)}`, 'error');
         return;
       }
       pi.appendEntry(QUERY_ENTRY_TYPE, { feature, locations: result.locations });
@@ -118,7 +140,11 @@ export default function (pi: ExtensionAPI): void {
         }
         return features;
       } catch (error) {
-        ctx.ui.notify(`Contextor could not list features: ${String(error)}`, 'warning');
+        if (error instanceof ContextorNotFoundError) {
+          ctx.ui.notify(error.message, 'error');
+        } else {
+          ctx.ui.notify(`Contextor could not list features: ${String(error)}`, 'warning');
+        }
         return [];
       }
     }
@@ -198,7 +224,7 @@ export default function (pi: ExtensionAPI): void {
   pi.registerMessageRenderer(MESSAGE_TYPE, (message, { expanded, outputPad }, theme) => {
     const features = message.details as string[] | undefined;
     const summary = features?.map((feature) => `#{${feature}}`).join(', ');
-    const title = summary ? `Contextor: ${summary}` : 'Contextor feature locations';
+    const title = summary ? `Contextor: ${summary}` : 'Contextor: CLI unavailable';
     if (typeof message.content !== 'string')
       return new Text(theme.fg('muted', title), outputPad, 0);
 
