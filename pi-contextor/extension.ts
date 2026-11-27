@@ -2,6 +2,8 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import { fuzzyFilter, Text } from '@earendil-works/pi-tui';
 
 const MESSAGE_TYPE = 'contextor-features';
+const QUERY_ENTRY_TYPE = 'contextor-query';
+const INDEX_TIMEOUT_MS = 120_000;
 const LIST_CACHE_MS = 2_000;
 const MAX_SUGGESTIONS = 20;
 const COMPLETION_PREFIX = /(?:^|\s)(#([^\s#{}]*))$/u;
@@ -11,9 +13,10 @@ type QueryResult = { locations: string } | { error: string };
 
 export default function (pi: ExtensionAPI): void {
   const draftQueries = new Map<string, Promise<QueryResult>>();
+  let featureListCache: { request: Promise<string[]>; expiresAt: number } | undefined;
 
-  async function runContextor(cwd: string, args: string[]): Promise<string> {
-    const result = await pi.exec('contextor', args, { cwd, timeout: 5_000 });
+  async function runContextor(cwd: string, args: string[], timeout = 5_000): Promise<string> {
+    const result = await pi.exec('contextor', args, { cwd, timeout });
     if (result.code !== 0) {
       throw new Error(result.stderr.trim() || `contextor exited with code ${result.code}`);
     }
@@ -56,12 +59,55 @@ export default function (pi: ExtensionAPI): void {
     }
   }
 
+  pi.registerEntryRenderer<{ feature: string; locations: string }>(
+    QUERY_ENTRY_TYPE,
+    (entry, _options, theme) => {
+      if (!entry.data) return undefined;
+      const { feature, locations } = entry.data;
+      const title = theme.fg('muted', `Contextor: ${feature}`);
+      return new Text(`${title}\n${locations || '(no indexed matches)'}`, 1, 0);
+    },
+  );
+
+  pi.registerCommand('contextor:query', {
+    description: 'Look up an exact feature identifier in the Contextor index',
+    handler: async (args, ctx) => {
+      const feature = args.trim();
+      if (!feature) {
+        ctx.ui.notify('Usage: /contextor:query <feature>', 'warning');
+        return;
+      }
+      const result = await queryFeature(ctx.cwd, feature);
+      if ('error' in result) {
+        ctx.ui.notify(`Contextor could not query ${feature}: ${result.error}`, 'error');
+        return;
+      }
+      pi.appendEntry(QUERY_ENTRY_TYPE, { feature, locations: result.locations });
+    },
+  });
+
+  pi.registerCommand('contextor:index', {
+    description: 'Create or update the Contextor index for the current project',
+    handler: async (_args, ctx) => {
+      ctx.ui.setStatus('contextor', 'Contextor: indexing…');
+      try {
+        await runContextor(ctx.cwd, ['index'], INDEX_TIMEOUT_MS);
+        draftQueries.clear();
+        featureListCache = undefined;
+        ctx.ui.notify('Contextor index updated', 'info');
+      } catch (error) {
+        ctx.ui.notify(`Contextor could not update the index: ${String(error)}`, 'error');
+      } finally {
+        ctx.ui.setStatus('contextor', undefined);
+      }
+    },
+  });
+
   pi.on('session_start', (_event, ctx) => {
     draftQueries.clear();
+    featureListCache = undefined;
     if (ctx.mode !== 'tui') return;
 
-    let listRequest: Promise<string[]> | undefined;
-    let listExpiresAt = 0;
     async function listFeatures(): Promise<string[]> {
       try {
         const output = await runContextor(ctx.cwd, ['features', '--format', 'json']);
@@ -83,13 +129,16 @@ export default function (pi: ExtensionAPI): void {
         const match = beforeCursor.match(COMPLETION_PREFIX);
         if (!match) return current.getSuggestions(lines, cursorLine, cursorCol, options);
 
-        if (!listRequest || Date.now() >= listExpiresAt) {
-          listExpiresAt = Infinity;
-          listRequest = listFeatures().finally(() => {
-            listExpiresAt = Date.now() + LIST_CACHE_MS;
-          });
+        if (!featureListCache || Date.now() >= featureListCache.expiresAt) {
+          const cache = {
+            request: listFeatures().finally(() => {
+              cache.expiresAt = Date.now() + LIST_CACHE_MS;
+            }),
+            expiresAt: Infinity,
+          };
+          featureListCache = cache;
         }
-        const features = await listRequest;
+        const features = await featureListCache.request;
         if (options.signal.aborted) return null;
         const candidates = match[2]
           ? fuzzyFilter(features, match[2], (feature) => feature)
