@@ -24,11 +24,16 @@ struct Heading {
 }
 
 pub(super) fn has_front_matter(source: &str) -> bool {
-    source.lines().next().is_some_and(|line| line.trim_end() == "---")
+    source
+        .lines()
+        .next()
+        .is_some_and(|line| line.trim_end() == "---")
 }
 
 fn split_front_matter(source: &str) -> (Option<&str>, usize) {
-    if has_front_matter(source) && let Some((opener, rest)) = source.split_once('\n') {
+    if has_front_matter(source)
+        && let Some((opener, rest)) = source.split_once('\n')
+    {
         let start = opener.len() + 1;
         let mut offset = start;
         for line in rest.split_inclusive('\n') {
@@ -45,7 +50,9 @@ pub(super) fn extract(extraction: &mut Extraction<'_>) {
     let source = extraction.source;
     let (front_matter, body_start) = split_front_matter(source);
     if let Some(yaml) = front_matter
-        && let Ok(FrontMatter { feature: Some(features) }) = serde_saphyr::from_str(yaml)
+        && let Ok(FrontMatter {
+            feature: Some(features),
+        }) = serde_saphyr::from_str(yaml)
     {
         let features = match features {
             Features::One(value) => vec![value],
@@ -66,11 +73,19 @@ pub(super) fn extract(extraction: &mut Extraction<'_>) {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
                 in_heading = true;
-                headings.push(Heading { level, range, title: String::new() });
+                headings.push(Heading {
+                    level,
+                    range,
+                    title: String::new(),
+                });
             }
             Event::End(TagEnd::Heading(_)) => in_heading = false,
             Event::Text(text) | Event::Code(text) if in_heading => {
-                headings.last_mut().expect("heading started").title.push_str(&text);
+                headings
+                    .last_mut()
+                    .expect("heading started")
+                    .title
+                    .push_str(&text);
             }
             Event::Start(Tag::HtmlBlock) | Event::InlineHtml(_) => {
                 // A multiline HTML block emits its contents as separate line events.
@@ -90,7 +105,10 @@ pub(super) fn extract(extraction: &mut Extraction<'_>) {
 
     let mut header_end = body_start;
     for (range, tags) in comments {
-        if source.get(header_end..range.start).is_some_and(|gap| gap.trim().is_empty()) {
+        if source
+            .get(header_end..range.start)
+            .is_some_and(|gap| gap.trim().is_empty())
+        {
             header_end = range.end;
             for feature in &tags.file_features {
                 extraction.add(feature, None, None);
@@ -111,7 +129,8 @@ fn add_comment_features(
     tags: Tags<'_>,
 ) {
     let source = extraction.source;
-    let remaining = &headings[headings.partition_point(|heading| heading.range.start < comment.end)..];
+    let remaining =
+        &headings[headings.partition_point(|heading| heading.range.start < comment.end)..];
     let heading = remaining.first().filter(|heading| {
         let gap = &source[comment.end..heading.range.start];
         gap.trim().is_empty() && gap.bytes().filter(|byte| *byte == b'\n').count() <= 1

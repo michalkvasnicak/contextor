@@ -46,24 +46,27 @@ fn default_limit() -> u32 {
 struct OpenApiDocument(Bytes);
 
 pub fn serve(root: PathBuf, listen: SocketAddr) -> Result<()> {
-    Builder::new_current_thread().enable_all().build()?.block_on(async {
-        let (router, document) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-            .routes(routes!(openapi))
-            .routes(routes!(query))
-            .split_for_parts();
-        let document = serde_json::to_vec(&document).context("serializing OpenAPI document")?;
-        let app = router
-            .layer(Extension(OpenApiDocument(document.into())))
-            .with_state(root);
-        let listener = TcpListener::bind(listen)
-            .await
-            .with_context(|| format!("binding HTTP server to {listen}"))?;
-        eprintln!("Contextor listening on http://{}", listener.local_addr()?);
-        axum::serve(listener, app)
-            .with_graceful_shutdown(shutdown_signal())
-            .await?;
-        Ok(())
-    })
+    Builder::new_current_thread()
+        .enable_all()
+        .build()?
+        .block_on(async {
+            let (router, document) = OpenApiRouter::with_openapi(ApiDoc::openapi())
+                .routes(routes!(openapi))
+                .routes(routes!(query))
+                .split_for_parts();
+            let document = serde_json::to_vec(&document).context("serializing OpenAPI document")?;
+            let app = router
+                .layer(Extension(OpenApiDocument(document.into())))
+                .with_state(root);
+            let listener = TcpListener::bind(listen)
+                .await
+                .with_context(|| format!("binding HTTP server to {listen}"))?;
+            eprintln!("Contextor listening on http://{}", listener.local_addr()?);
+            axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
+            Ok(())
+        })
 }
 
 /// Get the generated OpenAPI document.
@@ -93,7 +96,11 @@ async fn openapi(Extension(document): Extension<OpenApiDocument>) -> impl IntoRe
     )
 )]
 async fn query(State(root): State<PathBuf>, Query(params): Query<QueryParams>) -> Response {
-    let QueryParams { identifier, limit, format } = params;
+    let QueryParams {
+        identifier,
+        limit,
+        format,
+    } = params;
     let results = tokio::task::spawn_blocking(move || {
         index::query(&root, &identifier, limit.unwrap_or_else(default_limit))
     })

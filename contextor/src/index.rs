@@ -5,7 +5,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{Context, Result, ensure};
 use ignore::WalkBuilder;
-use rusqlite::{Connection, OpenFlags, Transaction, TransactionBehavior, params};
+use rusqlite::{Connection, ErrorCode, OpenFlags, Transaction, TransactionBehavior, params};
 
 use crate::Match;
 use crate::extract::Language;
@@ -16,8 +16,8 @@ const INDEX_VERSION: u32 = 2;
 pub fn update(root: &Path) -> Result<()> {
     let path = database_path(root)?;
     fs::create_dir_all(path.parent().expect("database path has a parent"))?;
-    let mut connection = Connection::open(&path)
-        .with_context(|| format!("opening {}", path.display()))?;
+    let mut connection =
+        Connection::open(&path).with_context(|| format!("opening {}", path.display()))?;
     connection.busy_timeout(Duration::from_secs(10))?;
     connection.pragma_update(None, "foreign_keys", true)?;
 
@@ -34,21 +34,31 @@ pub fn query(root: &Path, identifier: &str, limit: u32) -> Result<Vec<Match>> {
 
 pub fn features(root: &Path) -> Result<Vec<String>> {
     read_index(root, |db| {
-        let mut statement = db.prepare("SELECT DISTINCT feature FROM annotations ORDER BY feature")?;
+        let mut statement =
+            db.prepare("SELECT DISTINCT feature FROM annotations ORDER BY feature")?;
         let rows = statement.query_map([], |row| row.get(0))?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     })
 }
 
-fn read_index<T>(root: &Path, read: impl FnOnce(&Transaction<'_>) -> Result<T>) -> Result<T> {
+fn read_index<T>(
+    root: &Path,
+    read: impl FnOnce(&Transaction<'_>) -> Result<Vec<T>>,
+) -> Result<Vec<T>> {
     let path = database_path(root)?;
-    let mut connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .with_context(|| {
-            format!(
-                "could not open index at {}; run `contextor index` to create it",
-                path.display()
-            )
-        })?;
+    let mut connection = match Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+    {
+        Ok(connection) => connection,
+        Err(error) => {
+            if error.sqlite_error_code() == Some(ErrorCode::CannotOpen)
+                && matches!(path.try_exists(), Ok(false))
+            {
+                return Ok(Vec::new());
+            }
+            return Err(error)
+                .with_context(|| format!("could not open index at {}", path.display()));
+        }
+    };
     connection.busy_timeout(Duration::from_secs(10))?;
 
     let transaction = connection.transaction()?;
@@ -65,7 +75,9 @@ fn read_index<T>(root: &Path, read: impl FnOnce(&Transaction<'_>) -> Result<T>) 
 
 fn database_path(root: &Path) -> Result<PathBuf> {
     let base = dirs::home_dir().context("could not determine the home directory")?;
-    let slug = root.to_string_lossy().split(|c: char| !c.is_ascii_alphanumeric())
+    let slug = root
+        .to_string_lossy()
+        .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
         .join("-")
@@ -73,7 +85,8 @@ fn database_path(root: &Path) -> Result<PathBuf> {
     let slug = if slug.is_empty() { "root" } else { &slug };
     let suffix = &slug[slug.len().saturating_sub(80)..];
     let hash = blake3::hash(root.as_os_str().as_encoded_bytes()).to_hex();
-    Ok(base.join(".contextor")
+    Ok(base
+        .join(".contextor")
         .join(format!("{suffix}-{}", &hash[..16]))
         .join("index.sqlite"))
 }
@@ -113,7 +126,13 @@ struct CachedFile {
 fn inventory(db: &Transaction<'_>) -> Result<HashMap<String, CachedFile>> {
     let mut statement = db.prepare("SELECT path, stamp, hash FROM files")?;
     let rows = statement.query_map([], |row| {
-        Ok((row.get(0)?, CachedFile { stamp: row.get(1)?, hash: row.get(2)? }))
+        Ok((
+            row.get(0)?,
+            CachedFile {
+                stamp: row.get(1)?,
+                hash: row.get(2)?,
+            },
+        ))
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
@@ -122,9 +141,10 @@ fn refresh(db: &Transaction<'_>, root: &Path) -> Result<()> {
     let mut unseen = inventory(db)?;
     let walker = WalkBuilder::new(root)
         .require_git(false)
-        .filter_entry(|entry| entry.depth() == 0 || !matches!(
-            entry.file_name().to_str(), Some("node_modules" | ".git")
-        ))
+        .filter_entry(|entry| {
+            entry.depth() == 0
+                || !matches!(entry.file_name().to_str(), Some("node_modules" | ".git"))
+        })
         .build();
 
     for entry in walker {
@@ -133,8 +153,12 @@ fn refresh(db: &Transaction<'_>, root: &Path) -> Result<()> {
         if !entry.file_type().is_some_and(|kind| kind.is_file()) {
             continue;
         }
-        let Some(language) = Language::for_path(path) else { continue };
-        let Some(relative) = path.strip_prefix(root)?.to_str() else { continue };
+        let Some(language) = Language::for_path(path) else {
+            continue;
+        };
+        let Some(relative) = path.strip_prefix(root)?.to_str() else {
+            continue;
+        };
         let previous = unseen.remove(relative);
         refresh_file(db, path, relative, language, previous.as_ref())
             .with_context(|| format!("indexing {}", path.display()))?;
@@ -152,8 +176,13 @@ fn file_stamp(metadata: &Metadata) -> Option<String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        Some(format!("{stamp}:{}:{}:{}:{}", metadata.dev(), metadata.ino(),
-            metadata.ctime(), metadata.ctime_nsec()))
+        Some(format!(
+            "{stamp}:{}:{}:{}:{}",
+            metadata.dev(),
+            metadata.ino(),
+            metadata.ctime(),
+            metadata.ctime_nsec()
+        ))
     }
     #[cfg(not(unix))]
     Some(stamp)
@@ -175,12 +204,14 @@ fn refresh_file(
     db.prepare_cached(
         "INSERT INTO files (path, stamp, hash) VALUES (?1, ?2, ?3)
          ON CONFLICT(path) DO UPDATE SET stamp = excluded.stamp, hash = excluded.hash",
-    )?.execute(params![relative, stamp, hash.as_bytes().as_slice()])?;
+    )?
+    .execute(params![relative, stamp, hash.as_bytes().as_slice()])?;
     if previous.is_some_and(|file| file.hash.as_slice() == hash.as_bytes()) {
         return Ok(());
     }
 
-    db.prepare_cached("DELETE FROM annotations WHERE path = ?1")?.execute([relative])?;
+    db.prepare_cached("DELETE FROM annotations WHERE path = ?1")?
+        .execute([relative])?;
     if let Ok(source) = std::str::from_utf8(&bytes) {
         let annotations = language.extract(source)?;
         let mut insert = db.prepare_cached(
@@ -189,7 +220,13 @@ fn refresh_file(
         )?;
         for annotation in annotations {
             let (start, end) = annotation.lines.unzip();
-            insert.execute(params![relative, annotation.feature, annotation.symbol, start, end])?;
+            insert.execute(params![
+                relative,
+                annotation.feature,
+                annotation.symbol,
+                start,
+                end
+            ])?;
         }
     }
     Ok(())

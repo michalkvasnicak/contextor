@@ -118,9 +118,13 @@ fn write_text_results(output: &mut impl Write, results: &[impl Display]) -> io::
 
 fn main() -> Result<()> {
     match run() {
-        Err(error) if error.downcast_ref::<io::Error>().is_some_and(|e| {
-            e.kind() == io::ErrorKind::BrokenPipe
-        }) => Ok(()),
+        Err(error)
+            if error
+                .downcast_ref::<io::Error>()
+                .is_some_and(|e| e.kind() == io::ErrorKind::BrokenPipe) =>
+        {
+            Ok(())
+        }
         result => result,
     }
 }

@@ -131,7 +131,12 @@ impl<'a> Extraction<'a> {
         self.annotations.insert(Annotation {
             feature: feature.to_owned(),
             symbol: symbol.map(str::to_owned),
-            lines: range.map(|range| (self.line(range.start), self.line(range.end.saturating_sub(1)))),
+            lines: range.map(|range| {
+                (
+                    self.line(range.start),
+                    self.line(range.end.saturating_sub(1)),
+                )
+            }),
         });
     }
 
@@ -145,9 +150,11 @@ impl<'a> Extraction<'a> {
                 start: range.end,
                 features: tags.features,
             });
-        } else if tags.end && !tags.start
+        } else if tags.end
+            && !tags.start
             && self.blocks.last().is_some_and(|block| {
-                tags.end_feature.is_none_or(|feature| block.features.contains(&feature))
+                tags.end_feature
+                    .is_none_or(|feature| block.features.contains(&feature))
             })
             && let Some(block) = self.blocks.pop()
         {

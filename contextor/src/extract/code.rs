@@ -43,9 +43,10 @@ pub(super) fn extract(language: Language, extraction: &mut Extraction<'_>) -> Re
 fn extract_comment(node: Node<'_>, header_end: usize, extraction: &mut Extraction<'_>) {
     let source = extraction.source;
     let comment = &source[node.byte_range()];
-    let Some(body) = comment.strip_prefix("//").or_else(|| {
-        comment.strip_prefix("/*")?.strip_suffix("*/")
-    }) else {
+    let Some(body) = comment
+        .strip_prefix("//")
+        .or_else(|| comment.strip_prefix("/*")?.strip_suffix("*/"))
+    else {
         return;
     };
     let tags = Tags::parse(body);
@@ -56,7 +57,8 @@ fn extract_comment(node: Node<'_>, header_end: usize, extraction: &mut Extractio
     }
     if tags.start || tags.end {
         extraction.block_marker(node.byte_range(), tags);
-    } else if comment.starts_with("/**") && !tags.features.is_empty()
+    } else if comment.starts_with("/**")
+        && !tags.features.is_empty()
         && let Some(next) = node.next_named_sibling()
         && source[node.end_byte()..next.start_byte()].trim().is_empty()
     {
@@ -66,7 +68,8 @@ fn extract_comment(node: Node<'_>, header_end: usize, extraction: &mut Extractio
 
 fn extract_symbols(target: Node<'_>, features: &[&str], extraction: &mut Extraction<'_>) {
     let declaration = if matches!(target.kind(), "export_statement" | "ambient_declaration") {
-        target.child_by_field_name("declaration")
+        target
+            .child_by_field_name("declaration")
             .or_else(|| target.child_by_field_name("value"))
             .or_else(|| target.named_child(0))
             .unwrap_or(target)
@@ -85,18 +88,25 @@ fn extract_symbols(target: Node<'_>, features: &[&str], extraction: &mut Extract
             let mut cursor = declaration.walk();
             for variable in declaration.named_children(&mut cursor) {
                 if variable.kind() == "variable_declarator"
-                    && variable.child_by_field_name("name").is_some_and(|name| {
-                        name.kind() == "identifier"
-                    })
+                    && variable
+                        .child_by_field_name("name")
+                        .is_some_and(|name| name.kind() == "identifier")
                 {
                     add(variable);
                 }
             }
         }
-        "function_declaration" | "generator_function_declaration" | "function_signature"
-        | "function_expression" | "class_declaration" | "abstract_class_declaration"
-        | "interface_declaration" | "type_alias_declaration" | "enum_declaration"
-        | "internal_module" | "module" => add(declaration),
+        "function_declaration"
+        | "generator_function_declaration"
+        | "function_signature"
+        | "function_expression"
+        | "class_declaration"
+        | "abstract_class_declaration"
+        | "interface_declaration"
+        | "type_alias_declaration"
+        | "enum_declaration"
+        | "internal_module"
+        | "module" => add(declaration),
         _ if is_member(declaration) => add(declaration),
         _ => {}
     }
@@ -111,7 +121,9 @@ fn is_member(node: Node<'_>) -> bool {
             | "public_field_definition"
             | "field_definition"
             | "property_signature"
-    ) || node.parent().is_some_and(|parent| parent.kind() == "enum_body")
+    ) || node
+        .parent()
+        .is_some_and(|parent| parent.kind() == "enum_body")
 }
 
 fn name_node(node: Node<'_>) -> Option<Node<'_>> {
@@ -131,9 +143,9 @@ fn symbol_name(node: Node<'_>, source: &str) -> Option<String> {
         let mut ancestor = node.parent();
         while let Some(owner) = ancestor {
             if matches!(owner.kind(), "statement_block" | "block")
-                && !owner.parent().is_some_and(|parent| {
-                    matches!(parent.kind(), "internal_module" | "module")
-                })
+                && !owner
+                    .parent()
+                    .is_some_and(|parent| matches!(parent.kind(), "internal_module" | "module"))
             {
                 break;
             }

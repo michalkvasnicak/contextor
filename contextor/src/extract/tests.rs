@@ -17,7 +17,11 @@ fn parser_fixtures() -> Result<()> {
             fixtures.push(path);
         }
     }
-    ensure!(!fixtures.is_empty(), "no parser fixtures in {}", directory.display());
+    ensure!(
+        !fixtures.is_empty(),
+        "no parser fixtures in {}",
+        directory.display()
+    );
     fixtures.sort_unstable();
 
     let mut failures = Vec::new();
@@ -43,6 +47,9 @@ fn check_fixture(fixture: &Path) -> Result<()> {
 
     expected.sort_unstable();
     actual.sort_unstable();
-    ensure!(actual == expected, "expected {expected:#?}\nactual {actual:#?}");
+    ensure!(
+        actual == expected,
+        "expected {expected:#?}\nactual {actual:#?}"
+    );
     Ok(())
 }
